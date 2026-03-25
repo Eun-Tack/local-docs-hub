@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Local Docs Hub</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div id="root-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <p class="eyebrow">Root Folder</p>
+          <h2 class="modal-title">&#xB8E8;&#xD2B8; &#xD3F4;&#xB354; &#xC120;&#xD0DD;</h2>
+          <p class="modal-copy">&#xCC98;&#xC74C; &#xC811;&#xC18D; &#xC2DC; &#xBB38;&#xC11C;&#xB97C; &#xBD88;&#xB7EC;&#xC62C; &#xD3F4;&#xB354; &#xACBD;&#xB85C;&#xB97C; &#xC120;&#xD0DD;&#xD574; &#xC8FC;&#xC138;&#xC694;.</p>
+        </div>
+
+        <form id="root-picker-form" class="modal-form">
+          <label for="root-picker-input">&#xD3F4;&#xB354; &#xACBD;&#xB85C;</label>
+          <input id="root-picker-input" type="text" spellcheck="false" placeholder="&#xC608;: C:\Users\name\Documents\ProjectDocs">
+          <div class="modal-actions">
+            <button type="submit" id="root-picker-submit">&#xC5F4;&#xAE30;</button>
+            <button type="button" id="root-picker-favorites">&#xC990;&#xACA8;&#xCC3E;&#xAE30;</button>
+          </div>
+        </form>
+
+        <div id="root-picker-favorites-panel" class="favorites-panel hidden">
+          <p class="favorites-title">&#xC990;&#xACA8;&#xCC3E;&#xAE30; &#xB8E8;&#xD2B8;</p>
+          <div id="root-picker-favorites-list" class="favorites-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="favorites-modal" class="modal-backdrop hidden">
+      <div class="modal-card modal-card-narrow">
+        <div class="modal-header">
+          <p class="eyebrow">Favorites</p>
+          <h2 class="modal-title">&#xC990;&#xACA8;&#xCC3E;&#xAE30; &#xB8E8;&#xD2B8;</h2>
+          <p class="modal-copy">&#xD604;&#xC7AC; &#xB8E8;&#xD2B8;&#xB97C; &#xC800;&#xC7A5;&#xD558;&#xAC70;&#xB098; &#xB4F1;&#xB85D;&#xB41C; &#xACBD;&#xB85C;&#xB97C; &#xBC14;&#xB85C; &#xC120;&#xD0DD;&#xD560; &#xC218; &#xC788;&#xC2B5;&#xB2C8;&#xB2E4;.</p>
+        </div>
+
+        <div class="favorites-add">
+          <label for="favorite-root-input">&#xB8E8;&#xD2B8; &#xACBD;&#xB85C;</label>
+          <input id="favorite-root-input" type="text" spellcheck="false" placeholder="&#xC800;&#xC7A5;&#xD560; &#xD3F4;&#xB354; &#xACBD;&#xB85C;">
+          <div class="modal-actions">
+            <button type="button" id="save-favorite-root">&#xD604;&#xC7AC; &#xACBD;&#xB85C; &#xC800;&#xC7A5;</button>
+            <button type="button" id="close-favorites-modal">&#xB2EB;&#xAE30;</button>
+          </div>
+        </div>
+
+        <div id="favorite-roots-list" class="favorites-list"></div>
+      </div>
+    </div>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <div class="root-toolbar">
+            <label class="root-toolbar-label" for="root-path">Root Folder</label>
+            <button id="favorite-root-button" type="button" class="secondary-button">&#xC990;&#xACA8;&#xCC3E;&#xAE30;</button>
+          </div>
+
+          <form id="config-form" class="root-form">
+            <input id="root-path" name="rootPath" type="text" spellcheck="false" placeholder="&#xD3F4;&#xB354; &#xACBD;&#xB85C;&#xB97C; &#xC785;&#xB825;&#xD574; &#xC8FC;&#xC138;&#xC694;">
+            <button type="submit" id="apply-root">&#xC5F4;&#xAE30;</button>
+          </form>
+
+          <p id="root-summary" class="root-summary">&#xB8E8;&#xD2B8; &#xD3F4;&#xB354;&#xB97C; &#xC120;&#xD0DD;&#xD574; &#xC8FC;&#xC138;&#xC694;.</p>
+
+          <div class="sidebar-actions">
+            <button id="reload-tree">Reload</button>
+            <button id="print-doc">&#xB0B4;&#xC6A9;&#xB9CC; PDF</button>
+          </div>
+        </div>
+
+        <div class="sidebar-tree-panel">
+          <input id="search-input" type="search" placeholder="Filter files">
+          <div id="tree" class="tree"></div>
+        </div>
+      </aside>
+
+      <div class="content-shell">
+        <main class="main-panel">
+          <div class="viewer-header">
+            <div>
+              <p class="eyebrow">Document</p>
+              <h2 id="doc-title">Select a Markdown file</h2>
+              <p id="doc-path" class="doc-path"></p>
+            </div>
+            <div class="viewer-controls">
+              <label class="font-size-control" for="font-size-range">
+                <span>Text Size</span>
+                <input id="font-size-range" type="range" min="8" max="24" step="1" value="16">
+                <output id="font-size-value" for="font-size-range">16px</output>
+              </label>
+              <p class="font-size-note">8 = &#xAC00;&#xC7A5; &#xC791;&#xC740; &#xAE00;&#xC790; &#xD06C;&#xAE30; &#xAE30;&#xC900;</p>
+            </div>
+          </div>
+
+          <article id="viewer" class="viewer">
+            <div class="empty-state">
+              <h3>No document selected</h3>
+              <p>Pick a Markdown file from the left sidebar to render it here.</p>
+            </div>
+          </article>
+        </main>
+
+        <aside class="toc-panel">
+          <div class="toc-card">
+            <p class="eyebrow">Outline</p>
+            <h3 class="toc-title">&#xBAA9;&#xCC28;</h3>
+            <nav id="toc" class="toc">
+              <p class="toc-empty">&#xBB38;&#xC11C;&#xB97C; &#xC5F4;&#xBA74; &#xBAA9;&#xCC28;&#xAC00; &#xD45C;&#xC2DC;&#xB429;&#xB2C8;&#xB2E4;.</p>
+            </nav>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
