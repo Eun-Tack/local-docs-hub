@@ -5,24 +5,41 @@ const rootPathInput = document.querySelector("#root-path");
 const rootSummary = document.querySelector("#root-summary");
 const treeEl = document.querySelector("#tree");
 const viewerEl = document.querySelector("#viewer");
+const editorEl = document.querySelector("#editor");
+const editorPreviewEl = document.querySelector(".editor-preview");
 const docTitleEl = document.querySelector("#doc-title");
 const docPathEl = document.querySelector("#doc-path");
 const searchInput = document.querySelector("#search-input");
 const fontSizeRange = document.querySelector("#font-size-range");
 const fontSizeValue = document.querySelector("#font-size-value");
 const tocEl = document.querySelector("#toc");
+const saveStatusEl = document.querySelector("#save-status");
+const saveDocButton = document.querySelector("#save-doc-button");
+const cancelEditButton = document.querySelector("#cancel-edit-button");
+const newDocButton = document.querySelector("#new-doc-button");
+const editDocButton = document.querySelector("#edit-doc-button");
+const renameDocButton = document.querySelector("#rename-doc-button");
+const deleteDocButton = document.querySelector("#delete-doc-button");
 const rootModalEl = document.querySelector("#root-modal");
 const rootPickerForm = document.querySelector("#root-picker-form");
 const rootPickerInput = document.querySelector("#root-picker-input");
+const rootPickerBrowseButton = document.querySelector("#root-picker-browse");
+const rootPickerSuggestions = document.querySelector("#root-picker-suggestions");
 const rootPickerFavoritesButton = document.querySelector("#root-picker-favorites");
 const rootPickerFavoritesPanel = document.querySelector("#root-picker-favorites-panel");
 const rootPickerFavoritesList = document.querySelector("#root-picker-favorites-list");
 const favoritesModalEl = document.querySelector("#favorites-modal");
 const favoriteRootButton = document.querySelector("#favorite-root-button");
 const favoriteRootInput = document.querySelector("#favorite-root-input");
+const applyFavoriteRootButton = document.querySelector("#apply-favorite-root");
 const saveFavoriteRootButton = document.querySelector("#save-favorite-root");
 const closeFavoritesModalButton = document.querySelector("#close-favorites-modal");
 const favoriteRootsList = document.querySelector("#favorite-roots-list");
+const newDocModalEl = document.querySelector("#new-doc-modal");
+const newDocForm = document.querySelector("#new-doc-form");
+const newDocDirInput = document.querySelector("#new-doc-dir");
+const newDocNameInput = document.querySelector("#new-doc-name");
+const closeNewDocModalButton = document.querySelector("#close-new-doc-modal");
 
 const MIN_VIEWER_FONT_SIZE = 8;
 const MAX_VIEWER_FONT_SIZE = 24;
@@ -32,13 +49,23 @@ const FAVORITE_ROOTS_KEY = "local-docs-hub-favorite-roots";
 const TOC_EMPTY_MESSAGE = "\uBB38\uC11C\uB97C \uC5F4\uBA74 \uBAA9\uCC28\uAC00 \uD45C\uC2DC\uB429\uB2C8\uB2E4.";
 const TOC_ERROR_MESSAGE = "\uBAA9\uCC28\uB97C \uBD88\uB7EC\uC62C \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.";
 const ROOT_REQUIRED_MESSAGE = "\uB8E8\uD2B8 \uD3F4\uB354\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.";
+const SELECT_DOC_MESSAGE = "\uBB38\uC11C\uB97C \uC120\uD0DD\uD558\uAC70\uB098 \uC0C8 Markdown \uD30C\uC77C\uC744 \uB9CC\uB4E4\uC5B4 \uC8FC\uC138\uC694.";
+const SAVE_READY_MESSAGE = "\uC800\uC7A5\uB41C \uBC84\uC804\uC785\uB2C8\uB2E4.";
+const SAVE_DIRTY_MESSAGE = "\uC800\uC7A5\uB418\uC9C0 \uC54A\uC740 \uBCC0\uACBD \uC0AC\uD56D\uC774 \uC788\uC2B5\uB2C8\uB2E4.";
+const SAVE_SUCCESS_MESSAGE = "\uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4.";
 const PRINT_PAGE_HEIGHT_PX = 980;
 const PRINT_PAGE_WIDTH_PX = 700;
 
 let currentTree = [];
 let currentDocumentPath = null;
+let currentMarkdown = "";
+let lastSavedMarkdown = "";
 let defaultDocument = null;
 let currentRootPath = "";
+let isEditing = false;
+let autoSaveTimer = null;
+let saveRequest = null;
+let editSession = null;
 
 mermaid.initialize({
   startOnLoad: false,
@@ -65,6 +92,20 @@ const PRINT_BLOCK_SELECTOR = [
 ].join(", ");
 const PRINT_HEADING_SELECTOR = "h1, h2, h3, h4, h5, h6";
 
+function isAsciiDiagram(text) {
+  const source = String(text || "");
+  const lines = source.split("\n").filter((line) => line.trim());
+  if (lines.length < 3) return false;
+
+  const asciiMarkers = ["+--", "|", "->", "<-", "[", "]", "(", ")", "/", "\\", "*", "="];
+  const markerCount = asciiMarkers.reduce(
+    (count, marker) => count + (source.includes(marker) ? 1 : 0),
+    0
+  );
+
+  return markerCount >= 4;
+}
+
 function escapeHtml(value) {
   return value
     .replaceAll("&", "&amp;")
@@ -77,6 +118,14 @@ function dirname(relativePath) {
   const parts = normalized.split("/");
   parts.pop();
   return parts.join("/");
+}
+
+function normalizeRelativePath(targetPath) {
+  return String(targetPath || "").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+}
+
+function getCurrentDirectoryPath() {
+  return currentDocumentPath ? dirname(currentDocumentPath) : "";
 }
 
 function resolveRelativePath(baseDocPath, targetPath) {
@@ -106,7 +155,17 @@ function createRenderer(docPath) {
     if (lang === "mermaid") {
       return `<div class="mermaid">${escapeHtml(text)}</div>`;
     }
-    return `<pre><code class="language-${lang || "text"}">${escapeHtml(text)}</code></pre>`;
+
+    const classes = [`language-${lang || "text"}`];
+    const preClasses = [];
+
+    if (!lang && isAsciiDiagram(text)) {
+      preClasses.push("ascii-diagram");
+      classes.push("ascii-diagram-code");
+    }
+
+    const preClassAttr = preClasses.length ? ` class="${preClasses.join(" ")}"` : "";
+    return `<pre${preClassAttr}><code class="${classes.join(" ")}">${escapeHtml(text)}</code></pre>`;
   };
 
   renderer.image = ({ href, text, title }) => {
@@ -137,7 +196,11 @@ async function apiGet(url) {
   const response = await fetch(url);
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(error || "Request failed");
+    const message =
+      response.status === 404 && /^\/api\/doc(\/|$)/.test(url)
+        ? "요청한 문서를 찾을 수 없습니다. 파일 목록을 다시 불러옵니다."
+        : error || "Request failed";
+    throw new Error(message);
   }
   return response.json();
 }
@@ -150,6 +213,13 @@ async function apiPost(url, body = {}) {
   });
 
   if (!response.ok) {
+    if (
+      response.status === 404 &&
+      ["/api/doc/create", "/api/doc/rename", "/api/doc/delete"].includes(url)
+    ) {
+      throw new Error("서버가 최신 기능으로 다시 시작되지 않았습니다. 앱 서버를 재시작한 뒤 다시 시도해 주세요.");
+    }
+
     const payload = await response.json().catch(() => ({ error: "Request failed" }));
     throw new Error(payload.error || "Request failed");
   }
@@ -186,14 +256,61 @@ function removeFavoriteRoot(path) {
   writeFavoriteRoots(readFavoriteRoots().filter((item) => item !== path));
 }
 
+function clearAutoSaveTimer() {
+  if (autoSaveTimer) {
+    window.clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+  }
+}
+
+function updateDocActionStates() {
+  const hasDoc = Boolean(currentDocumentPath);
+  editDocButton.disabled = !hasDoc || isEditing;
+  renameDocButton.disabled = !hasDoc;
+  deleteDocButton.disabled = !hasDoc;
+  saveDocButton.disabled = !hasDoc || !isEditing || currentMarkdown === lastSavedMarkdown;
+  cancelEditButton.disabled = !isEditing;
+  editDocButton.textContent = "\uC218\uC815";
+}
+
+function updateSaveState(message = SAVE_READY_MESSAGE, dirty = false) {
+  saveStatusEl.textContent = message;
+  saveStatusEl.classList.toggle("dirty", dirty);
+  updateDocActionStates();
+}
+
 function setRootSummary(path) {
   rootSummary.textContent = path || ROOT_REQUIRED_MESSAGE;
 }
 
+function setEditingMode(nextEditing) {
+  const shouldEdit = Boolean(nextEditing && currentDocumentPath);
+  if (shouldEdit && !editSession) {
+    editSession = {
+      path: currentDocumentPath,
+      markdown: lastSavedMarkdown,
+      createdPath: null,
+      previousPath: null
+    };
+  }
+
+  if (!shouldEdit) {
+    editSession = null;
+  }
+
+  isEditing = shouldEdit;
+  editorPreviewEl.classList.toggle("editing", isEditing);
+  editorEl.disabled = !isEditing;
+  updateDocActionStates();
+}
+
 function setEmptyViewer(message = ROOT_REQUIRED_MESSAGE) {
   currentDocumentPath = null;
+  currentMarkdown = "";
+  lastSavedMarkdown = "";
   docTitleEl.textContent = "Select a Markdown file";
   docPathEl.textContent = "";
+  editorEl.value = "";
   viewerEl.innerHTML = `
     <div class="empty-state">
       <h3>Ready</h3>
@@ -201,6 +318,9 @@ function setEmptyViewer(message = ROOT_REQUIRED_MESSAGE) {
     </div>
   `;
   tocEl.innerHTML = `<p class="toc-empty">${TOC_EMPTY_MESSAGE}</p>`;
+  clearAutoSaveTimer();
+  setEditingMode(false);
+  updateSaveState(SAVE_READY_MESSAGE, false);
 }
 
 function openRootModal() {
@@ -223,6 +343,17 @@ function closeFavoritesModal() {
   favoritesModalEl.classList.add("hidden");
 }
 
+function openNewDocModal() {
+  newDocDirInput.value = getCurrentDirectoryPath();
+  newDocNameInput.value = "";
+  newDocModalEl.classList.remove("hidden");
+  newDocNameInput.focus();
+}
+
+function closeNewDocModal() {
+  newDocModalEl.classList.add("hidden");
+}
+
 function createFavoriteItem(path, { compact = false } = {}) {
   const item = document.createElement("div");
   item.className = compact ? "favorite-item compact" : "favorite-item";
@@ -232,6 +363,8 @@ function createFavoriteItem(path, { compact = false } = {}) {
   pathButton.className = "favorite-path";
   pathButton.textContent = path;
   pathButton.addEventListener("click", async () => {
+    const okay = await confirmDocumentChange();
+    if (!okay) return;
     rootPathInput.value = path;
     rootPickerInput.value = path;
     favoriteRootInput.value = path;
@@ -481,22 +614,14 @@ function renderTree(tree, filterText = "") {
   treeEl.appendChild(renderNodes(tree));
 }
 
-async function renderCurrentDocument(docPath) {
-  const payload = await apiGet(`/api/doc?path=${encodeURIComponent(docPath)}`);
-  currentDocumentPath = payload.path;
-  docTitleEl.textContent = payload.name;
-  docPathEl.textContent = payload.path;
-
+async function renderPreview(markdown, docPath = currentDocumentPath || "") {
   marked.setOptions({
     gfm: true,
     breaks: true,
-    renderer: createRenderer(payload.path)
+    renderer: createRenderer(docPath)
   });
 
-  viewerEl.innerHTML = marked.parse(payload.markdown);
-  prepareViewerForPrint();
-  renderToc();
-  renderTree(currentTree, searchInput.value);
+  viewerEl.innerHTML = marked.parse(markdown || "");
 
   for (const mermaidBlock of viewerEl.querySelectorAll(".mermaid")) {
     const definition = mermaidBlock.textContent;
@@ -508,6 +633,75 @@ async function renderCurrentDocument(docPath) {
   }
 
   fitMermaidDiagrams();
+  prepareViewerForPrint();
+  renderToc();
+}
+
+function syncDirtyState() {
+  const dirty = currentMarkdown !== lastSavedMarkdown;
+  updateSaveState(dirty ? SAVE_DIRTY_MESSAGE : SAVE_READY_MESSAGE, dirty);
+}
+
+async function flushPendingSave() {
+  if (autoSaveTimer) {
+    clearAutoSaveTimer();
+  }
+
+  if (currentDocumentPath && currentMarkdown !== lastSavedMarkdown) {
+    await saveCurrentDocument({ silent: true });
+  }
+
+  if (saveRequest) {
+    await saveRequest;
+  }
+}
+
+async function confirmDocumentChange() {
+  if (!currentDocumentPath || currentMarkdown === lastSavedMarkdown) {
+    return true;
+  }
+
+  const shouldSave = window.confirm(
+    "\uC800\uC7A5\uB418\uC9C0 \uC54A\uC740 \uBCC0\uACBD \uC0AC\uD56D\uC774 \uC788\uC2B5\uB2C8\uB2E4. \uC800\uC7A5 \uD6C4 \uC774\uB3D9\uD560\uAE4C\uC694?"
+  );
+
+  if (!shouldSave) {
+    return false;
+  }
+
+  try {
+    await flushPendingSave();
+    return true;
+  } catch (error) {
+    window.alert(error.message);
+    return false;
+  }
+}
+
+function updateTreeActiveState() {
+  for (const button of treeEl.querySelectorAll(".tree-link")) {
+    button.classList.toggle("active", button.dataset.path === currentDocumentPath);
+  }
+}
+
+async function openDocumentFromPayload(payload) {
+  currentDocumentPath = payload.path;
+  currentMarkdown = payload.markdown;
+  lastSavedMarkdown = payload.markdown;
+  docTitleEl.textContent = payload.name;
+  docPathEl.textContent = payload.path;
+  editorEl.value = payload.markdown;
+  setEditingMode(false);
+  await renderPreview(payload.markdown, payload.path);
+  editorEl.scrollTop = 0;
+  viewerEl.scrollTop = 0;
+  updateTreeActiveState();
+  updateSaveState(SAVE_READY_MESSAGE, false);
+}
+
+async function renderCurrentDocument(docPath) {
+  const payload = await apiGet(`/api/doc?path=${encodeURIComponent(docPath)}`);
+  await openDocumentFromPayload(payload);
 }
 
 async function loadTree(openDefault = false) {
@@ -523,14 +717,42 @@ async function loadTree(openDefault = false) {
   if (openDefault) {
     const target = currentDocumentPath || defaultDocument;
     if (target) {
-      await renderCurrentDocument(target);
-      return;
+      try {
+        await renderCurrentDocument(target);
+        return;
+      } catch (error) {
+        currentDocumentPath = null;
+        currentMarkdown = "";
+        lastSavedMarkdown = "";
+
+        if (target !== defaultDocument && defaultDocument) {
+          try {
+            await renderCurrentDocument(defaultDocument);
+            return;
+          } catch {
+            // Fall through to empty viewer state.
+          }
+        }
+      }
     }
   }
 
   if (!currentDocumentPath) {
-    setEmptyViewer(currentRootPath ? "\uBB38\uC11C\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694." : ROOT_REQUIRED_MESSAGE);
+    setEmptyViewer(currentRootPath ? SELECT_DOC_MESSAGE : ROOT_REQUIRED_MESSAGE);
   }
+}
+
+async function browseFolder() {
+  if (window.electronAPI) {
+    const result = await window.electronAPI.selectFolder();
+    if (result.cancelled || !result.folderPath) return null;
+    return result.folderPath;
+  }
+
+  const params = currentRootPath ? `?initialPath=${encodeURIComponent(currentRootPath)}` : "";
+  const payload = await apiGet(`/api/browse-folder${params}`);
+  if (payload.cancelled || !payload.folderPath) return null;
+  return payload.folderPath;
 }
 
 async function applyRootPath(path) {
@@ -542,12 +764,129 @@ async function applyRootPath(path) {
 
   await apiPost("/api/config", { rootPath: nextRoot });
   currentRootPath = nextRoot;
+  currentDocumentPath = null;
+  currentMarkdown = "";
+  lastSavedMarkdown = "";
   rootPathInput.value = nextRoot;
   rootPickerInput.value = nextRoot;
   favoriteRootInput.value = nextRoot;
   saveFavoriteRoot(nextRoot);
   renderFavoriteLists();
   closeRootModal();
+  await loadTree(true);
+}
+
+async function saveCurrentDocument({ silent = false } = {}) {
+  if (!currentDocumentPath || currentMarkdown === lastSavedMarkdown) return;
+
+  clearAutoSaveTimer();
+  const snapshot = currentMarkdown;
+  const request = apiPost("/api/doc", {
+    path: currentDocumentPath,
+    markdown: snapshot
+  });
+
+  saveRequest = request;
+
+  try {
+    await request;
+    lastSavedMarkdown = snapshot;
+    updateSaveState(silent ? SAVE_READY_MESSAGE : SAVE_SUCCESS_MESSAGE, false);
+    await loadTree(false);
+  } finally {
+    if (saveRequest === request) {
+      saveRequest = null;
+    }
+  }
+}
+
+async function createNewDocument(dirPath, fileName) {
+  const previousPath = currentDocumentPath;
+  const payload = await apiPost("/api/doc/create", {
+    dirPath,
+    fileName,
+    markdown: ""
+  });
+
+  closeNewDocModal();
+  await loadTree(false);
+  await renderCurrentDocument(payload.path);
+  setEditingMode(true);
+  editSession = {
+    path: payload.path,
+    markdown: "",
+    createdPath: payload.path,
+    previousPath
+  };
+  editorEl.focus();
+}
+
+async function cancelCurrentEdit() {
+  if (!isEditing || !editSession) return;
+
+  const session = editSession;
+  clearAutoSaveTimer();
+
+  if (session.createdPath && currentDocumentPath === session.createdPath) {
+    await apiPost("/api/doc/delete", { path: session.createdPath });
+    setEditingMode(false);
+    await loadTree(false);
+
+    if (session.previousPath) {
+      try {
+        await renderCurrentDocument(session.previousPath);
+        return;
+      } catch {
+        // The previous document may have been deleted outside the app.
+      }
+    }
+
+    setEmptyViewer(SELECT_DOC_MESSAGE);
+    renderTree(currentTree, searchInput.value);
+    return;
+  }
+
+  currentMarkdown = session.markdown;
+  lastSavedMarkdown = session.markdown;
+  editorEl.value = session.markdown;
+  setEditingMode(false);
+  await renderPreview(currentMarkdown, currentDocumentPath);
+  updateSaveState(SAVE_READY_MESSAGE, false);
+}
+
+async function renameCurrentDocument() {
+  if (!currentDocumentPath) return;
+
+  const currentName = currentDocumentPath.split("/").pop() || "";
+  const nextName = window.prompt("\uC0C8 \uD30C\uC77C\uBA85\uC744 \uC785\uB825\uD574 \uC8FC\uC138\uC694.", currentName);
+  if (!nextName || nextName === currentName) return;
+
+  const payload = await apiPost("/api/doc/rename", {
+    path: currentDocumentPath,
+    fileName: nextName
+  });
+
+  currentDocumentPath = payload.path;
+  docTitleEl.textContent = payload.name;
+  docPathEl.textContent = payload.path;
+  await loadTree(false);
+  renderTree(currentTree, searchInput.value);
+}
+
+async function deleteCurrentDocument() {
+  if (!currentDocumentPath) return;
+
+  const confirmed = window.confirm(
+    "\uC774 Markdown \uD30C\uC77C\uC744 \uC0AD\uC81C\uD560\uAE4C\uC694? \uC774 \uC791\uC5C5\uC740 \uB418\uB3CC\uB9B4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4."
+  );
+  if (!confirmed) return;
+
+  await apiPost("/api/doc/delete", { path: currentDocumentPath });
+  currentDocumentPath = null;
+  currentMarkdown = "";
+  lastSavedMarkdown = "";
+  clearAutoSaveTimer();
+  setEditingMode(false);
   await loadTree(true);
 }
 
@@ -567,8 +906,11 @@ async function bootstrap() {
   await loadTree(true);
 }
 
-window.addEventListener("beforeunload", () => {
-  navigator.sendBeacon("/api/reset-root", new Blob(["{}"], { type: "application/json" }));
+window.addEventListener("beforeunload", (event) => {
+  if (currentMarkdown !== lastSavedMarkdown || autoSaveTimer || saveRequest) {
+    event.preventDefault();
+    event.returnValue = "";
+  }
 });
 
 document.querySelector("#reload-tree").addEventListener("click", async () => {
@@ -576,30 +918,118 @@ document.querySelector("#reload-tree").addEventListener("click", async () => {
     openRootModal();
     return;
   }
+
+  const okay = await confirmDocumentChange();
+  if (!okay) return;
+
   await loadTree(true);
 });
 
-document.querySelector("#print-doc").addEventListener("click", () => {
+document.querySelector("#print-doc").addEventListener("click", async () => {
+  await renderPreview(currentMarkdown, currentDocumentPath);
   prepareViewerForPrint();
   fitMermaidDiagrams();
   window.print();
 });
 
-document.querySelector("#config-form").addEventListener("submit", async (event) => {
+document.querySelector("#config-form").addEventListener("submit", (event) => {
   event.preventDefault();
+  openRootModal();
+});
 
+let suggestTimer = null;
+
+function hideSuggestions() {
+  rootPickerSuggestions.classList.add("hidden");
+  rootPickerSuggestions.innerHTML = "";
+}
+
+function showSuggestions(paths) {
+  rootPickerSuggestions.innerHTML = "";
+  if (!paths.length) {
+    hideSuggestions();
+    return;
+  }
+  for (const p of paths) {
+    const li = document.createElement("li");
+    li.textContent = p;
+    li.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      rootPickerInput.value = p;
+      hideSuggestions();
+      rootPickerInput.focus();
+    });
+    rootPickerSuggestions.appendChild(li);
+  }
+  rootPickerSuggestions.classList.remove("hidden");
+}
+
+rootPickerInput.addEventListener("input", () => {
+  clearTimeout(suggestTimer);
+  const val = rootPickerInput.value.trim();
+  if (!val) { hideSuggestions(); return; }
+  suggestTimer = setTimeout(async () => {
+    try {
+      const list = await apiGet(`/api/suggest-path?q=${encodeURIComponent(val)}`);
+      showSuggestions(list);
+    } catch {
+      hideSuggestions();
+    }
+  }, 180);
+});
+
+rootPickerInput.addEventListener("keydown", (e) => {
+  if (rootPickerSuggestions.classList.contains("hidden")) return;
+  const items = [...rootPickerSuggestions.querySelectorAll("li")];
+  const activeItem = rootPickerSuggestions.querySelector("li.active");
+  const activeIndex = items.indexOf(activeItem);
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    const next = items[activeIndex + 1] ?? items[0];
+    activeItem?.classList.remove("active");
+    next.classList.add("active");
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    const prev = items[activeIndex - 1] ?? items[items.length - 1];
+    activeItem?.classList.remove("active");
+    prev.classList.add("active");
+  } else if (e.key === "Enter" && activeItem) {
+    e.preventDefault();
+    rootPickerInput.value = activeItem.textContent;
+    hideSuggestions();
+  } else if (e.key === "Escape") {
+    hideSuggestions();
+  } else if (e.key === "Tab" && activeItem) {
+    e.preventDefault();
+    rootPickerInput.value = activeItem.textContent;
+    hideSuggestions();
+  }
+});
+
+rootPickerInput.addEventListener("blur", () => {
+  setTimeout(hideSuggestions, 150);
+});
+
+rootPickerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const nextPath = rootPickerInput.value.trim();
+  if (!nextPath) return;
   try {
-    await applyRootPath(rootPathInput.value);
+    const okay = await confirmDocumentChange();
+    if (!okay) return;
+    await applyRootPath(nextPath);
   } catch (error) {
     window.alert(error.message);
   }
 });
 
-rootPickerForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
+rootPickerBrowseButton.addEventListener("click", async () => {
   try {
-    await applyRootPath(rootPickerInput.value);
+    const okay = await confirmDocumentChange();
+    if (!okay) return;
+    const folder = await browseFolder();
+    if (folder) await applyRootPath(folder);
   } catch (error) {
     window.alert(error.message);
   }
@@ -612,6 +1042,22 @@ rootPickerFavoritesButton.addEventListener("click", () => {
 
 favoriteRootButton.addEventListener("click", () => {
   openFavoritesModal();
+});
+
+applyFavoriteRootButton.addEventListener("click", async () => {
+  const target = String(favoriteRootInput.value || "").trim();
+  if (!target) {
+    window.alert(ROOT_REQUIRED_MESSAGE);
+    return;
+  }
+  try {
+    const okay = await confirmDocumentChange();
+    if (!okay) return;
+    closeFavoritesModal();
+    await applyRootPath(target);
+  } catch (error) {
+    window.alert(error.message);
+  }
 });
 
 saveFavoriteRootButton.addEventListener("click", () => {
@@ -628,9 +1074,90 @@ closeFavoritesModalButton.addEventListener("click", () => {
   closeFavoritesModal();
 });
 
+newDocButton.addEventListener("click", async () => {
+  if (!currentRootPath) {
+    openRootModal();
+    return;
+  }
+
+  const okay = await confirmDocumentChange();
+  if (!okay) return;
+
+  openNewDocModal();
+});
+
+editDocButton.addEventListener("click", async () => {
+  if (!currentDocumentPath) return;
+
+  try {
+    setEditingMode(true);
+    editorEl.focus();
+  } catch (error) {
+    window.alert(error.message);
+  }
+});
+
+closeNewDocModalButton.addEventListener("click", () => {
+  closeNewDocModal();
+});
+
+newDocForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  try {
+    await createNewDocument(
+      normalizeRelativePath(newDocDirInput.value),
+      newDocNameInput.value
+    );
+  } catch (error) {
+    window.alert(error.message);
+  }
+});
+
+saveDocButton.addEventListener("click", async () => {
+  try {
+    await saveCurrentDocument();
+    setEditingMode(false);
+  } catch (error) {
+    window.alert(error.message);
+  }
+});
+
+cancelEditButton.addEventListener("click", async () => {
+  try {
+    await cancelCurrentEdit();
+  } catch (error) {
+    window.alert(error.message);
+  }
+});
+
+renameDocButton.addEventListener("click", async () => {
+  try {
+    const okay = await confirmDocumentChange();
+    if (!okay) return;
+    await renameCurrentDocument();
+  } catch (error) {
+    window.alert(error.message);
+  }
+});
+
+deleteDocButton.addEventListener("click", async () => {
+  try {
+    const okay = await confirmDocumentChange();
+    if (!okay) return;
+    await deleteCurrentDocument();
+  } catch (error) {
+    window.alert(error.message);
+  }
+});
+
 treeEl.addEventListener("click", async (event) => {
   const button = event.target.closest(".tree-link");
   if (!button) return;
+
+  const okay = await confirmDocumentChange();
+  if (!okay) return;
+
   await renderCurrentDocument(button.dataset.path);
 });
 
@@ -638,6 +1165,10 @@ viewerEl.addEventListener("click", async (event) => {
   const link = event.target.closest("[data-doc-link]");
   if (!link) return;
   event.preventDefault();
+
+  const okay = await confirmDocumentChange();
+  if (!okay) return;
+
   await renderCurrentDocument(link.dataset.docLink);
 });
 
@@ -652,6 +1183,12 @@ tocEl.addEventListener("click", (event) => {
     behavior: "smooth",
     block: "start"
   });
+});
+
+editorEl.addEventListener("input", async () => {
+  currentMarkdown = editorEl.value;
+  syncDirtyState();
+  await renderPreview(currentMarkdown, currentDocumentPath);
 });
 
 searchInput.addEventListener("input", () => {
@@ -679,7 +1216,15 @@ favoritesModalEl.addEventListener("click", (event) => {
   }
 });
 
+newDocModalEl.addEventListener("click", (event) => {
+  if (event.target === newDocModalEl) {
+    closeNewDocModal();
+  }
+});
+
 loadViewerFontSizePreference();
+setEditingMode(false);
+updateDocActionStates();
 
 bootstrap().catch((error) => {
   setEmptyViewer(error.message);

@@ -12,14 +12,18 @@
         <div class="modal-header">
           <p class="eyebrow">Root Folder</p>
           <h2 class="modal-title">&#xB8E8;&#xD2B8; &#xD3F4;&#xB354; &#xC120;&#xD0DD;</h2>
-          <p class="modal-copy">&#xCC98;&#xC74C; &#xC811;&#xC18D; &#xC2DC; &#xBB38;&#xC11C;&#xB97C; &#xBD88;&#xB7EC;&#xC62C; &#xD3F4;&#xB354; &#xACBD;&#xB85C;&#xB97C; &#xC120;&#xD0DD;&#xD574; &#xC8FC;&#xC138;&#xC694;.</p>
+          <p class="modal-copy">&#xBB38;&#xC11C;&#xB97C; &#xBD88;&#xB7EC;&#xC62C; &#xD3F4;&#xB354;&#xB97C; &#xC120;&#xD0DD;&#xD574; &#xC8FC;&#xC138;&#xC694;.</p>
         </div>
 
         <form id="root-picker-form" class="modal-form">
           <label for="root-picker-input">&#xD3F4;&#xB354; &#xACBD;&#xB85C;</label>
-          <input id="root-picker-input" type="text" spellcheck="false" placeholder="&#xC608;: C:\Users\name\Documents\ProjectDocs">
+          <div class="path-suggest-wrap">
+            <input id="root-picker-input" type="text" spellcheck="false" autocomplete="off" placeholder="&#xACBD;&#xB85C;&#xB97C; &#xC785;&#xB825;&#xD558;&#xAC70;&#xB098; &#xD3F4;&#xB354;&#xB97C; &#xCC3E;&#xC544;&#xBCF4;&#xC138;&#xC694;">
+            <ul id="root-picker-suggestions" class="path-suggestions hidden"></ul>
+          </div>
           <div class="modal-actions">
-            <button type="submit" id="root-picker-submit">&#xC5F4;&#xAE30;</button>
+            <button type="submit">&#xC801;&#xC6A9;</button>
+            <button type="button" id="root-picker-browse">&#xD3F4;&#xB354; &#xCC3E;&#xC544;&#xBCF4;&#xAE30;</button>
             <button type="button" id="root-picker-favorites">&#xC990;&#xACA8;&#xCC3E;&#xAE30;</button>
           </div>
         </form>
@@ -43,12 +47,36 @@
           <label for="favorite-root-input">&#xB8E8;&#xD2B8; &#xACBD;&#xB85C;</label>
           <input id="favorite-root-input" type="text" spellcheck="false" placeholder="&#xC800;&#xC7A5;&#xD560; &#xD3F4;&#xB354; &#xACBD;&#xB85C;">
           <div class="modal-actions">
-            <button type="button" id="save-favorite-root">&#xD604;&#xC7AC; &#xACBD;&#xB85C; &#xC800;&#xC7A5;</button>
+            <button type="button" id="apply-favorite-root">&#xC801;&#xC6A9;</button>
+            <button type="button" id="save-favorite-root">&#xC990;&#xACA8;&#xCC3E;&#xAE30; &#xC800;&#xC7A5;</button>
             <button type="button" id="close-favorites-modal">&#xB2EB;&#xAE30;</button>
           </div>
         </div>
 
         <div id="favorite-roots-list" class="favorites-list"></div>
+      </div>
+    </div>
+
+    <div id="new-doc-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <p class="eyebrow">Markdown</p>
+          <h2 class="modal-title">&#xC0C8; Markdown &#xD30C;&#xC77C; &#xC0DD;&#xC131;</h2>
+          <p class="modal-copy">&#xC0DD;&#xC131;&#xD560; &#xD3F4;&#xB354;&#xC640; &#xD30C;&#xC77C;&#xBA85;&#xC744; &#xC785;&#xB825;&#xD558;&#xBA74; &#xBC14;&#xB85C; &#xD3B8;&#xC9D1;&#xC744; &#xC2DC;&#xC791;&#xD560; &#xC218; &#xC788;&#xC2B5;&#xB2C8;&#xB2E4;.</p>
+        </div>
+
+        <form id="new-doc-form" class="modal-form">
+          <label for="new-doc-dir">&#xD3F4;&#xB354; &#xACBD;&#xB85C;</label>
+          <input id="new-doc-dir" type="text" spellcheck="false" placeholder="&#xC608;: docs/meeting-notes">
+
+          <label for="new-doc-name">&#xD30C;&#xC77C;&#xBA85;</label>
+          <input id="new-doc-name" type="text" spellcheck="false" placeholder="&#xC608;: weekly-update.md">
+
+          <div class="modal-actions">
+            <button type="submit">&#xC0DD;&#xC131;</button>
+            <button type="button" id="close-new-doc-modal">&#xB2EB;&#xAE30;</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -61,8 +89,8 @@
           </div>
 
           <form id="config-form" class="root-form">
-            <input id="root-path" name="rootPath" type="text" spellcheck="false" placeholder="&#xD3F4;&#xB354; &#xACBD;&#xB85C;&#xB97C; &#xC785;&#xB825;&#xD574; &#xC8FC;&#xC138;&#xC694;">
-            <button type="submit" id="apply-root">&#xC5F4;&#xAE30;</button>
+            <input id="root-path" name="rootPath" type="text" spellcheck="false" readonly placeholder="&#xD3F4;&#xB354;&#xB97C; &#xC120;&#xD0DD;&#xD574; &#xC8FC;&#xC138;&#xC694;">
+            <button type="submit" id="apply-root">&#xD3F4;&#xB354; &#xCC3E;&#xC544;&#xBCF4;&#xAE30;</button>
           </form>
 
           <p id="root-summary" class="root-summary">&#xB8E8;&#xD2B8; &#xD3F4;&#xB354;&#xB97C; &#xC120;&#xD0DD;&#xD574; &#xC8FC;&#xC138;&#xC694;.</p>
@@ -88,6 +116,15 @@
               <p id="doc-path" class="doc-path"></p>
             </div>
             <div class="viewer-controls">
+              <div class="doc-actions">
+                <button id="new-doc-button" type="button">&#xC0C8; Markdown</button>
+                <button id="edit-doc-button" type="button">&#xC218;&#xC815;</button>
+                <button id="save-doc-button" type="button">&#xC800;&#xC7A5;</button>
+                <button id="cancel-edit-button" type="button">&#xCDE8;&#xC18C;</button>
+                <button id="rename-doc-button" type="button">&#xC774;&#xB984; &#xBCC0;&#xACBD;</button>
+                <button id="delete-doc-button" type="button">&#xC0AD;&#xC81C;</button>
+              </div>
+              <p id="save-status" class="save-status">&#xC800;&#xC7A5;&#xB41C; &#xBC84;&#xC804;&#xC785;&#xB2C8;&#xB2E4;.</p>
               <label class="font-size-control" for="font-size-range">
                 <span>Text Size</span>
                 <input id="font-size-range" type="range" min="8" max="24" step="1" value="16">
@@ -97,12 +134,28 @@
             </div>
           </div>
 
-          <article id="viewer" class="viewer">
-            <div class="empty-state">
-              <h3>No document selected</h3>
-              <p>Pick a Markdown file from the left sidebar to render it here.</p>
+          <section class="editor-preview">
+            <div class="editor-pane">
+              <div class="pane-header">
+                <p class="eyebrow">Editor</p>
+                <h3 class="pane-title">Markdown &#xC791;&#xC131;</h3>
+              </div>
+              <textarea id="editor" class="editor" spellcheck="false" placeholder="Markdown &#xB0B4;&#xC6A9;&#xC744; &#xC791;&#xC131;&#xD574; &#xC8FC;&#xC138;&#xC694;"></textarea>
             </div>
-          </article>
+
+            <div class="preview-pane">
+              <div class="pane-header">
+                <p class="eyebrow">Preview</p>
+                <h3 class="pane-title">&#xBBF8;&#xB9AC;&#xBCF4;&#xAE30;</h3>
+              </div>
+              <article id="viewer" class="viewer">
+                <div class="empty-state">
+                  <h3>No document selected</h3>
+                  <p>Pick a Markdown file from the left sidebar to render it here.</p>
+                </div>
+              </article>
+            </div>
+          </section>
         </main>
 
         <aside class="toc-panel">
